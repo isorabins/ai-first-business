@@ -1,0 +1,19 @@
+# credentials and secrets
+*.env
+.env*
+secrets/
+credentials/
+*_key*
+*_token*
+*.pem
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editors
+.vscode/
+.idea/
+
+# logs
+*.log

@@ -17,6 +17,7 @@ These aren't theoretical. They were built to solve real problems and are running
 ## Structure
 
 ```
+/source/              # Actual source code from the build (de-identified, ready to use)
 /skills/              # Reusable agent skill files
 /workflows/           # Step-by-step workflow docs for specific tasks
 /prompts/             # Prompt templates that work
@@ -30,7 +31,7 @@ Each folder has its own README explaining what's inside and how to use it.
 
 | Episode | Topic | Repo folder |
 |---------|-------|-------------|
-| Ep 03 | CMS blog publishing workflow | `/workflows/blog-cms/` |
+| Ep 03 | CMS blog publishing workflow | `/workflows/blog-cms/`, `/source/blog-cms/` |
 
 More added each week as the series progresses.
 

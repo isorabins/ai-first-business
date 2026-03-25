@@ -30,35 +30,35 @@ We ran this across 5 Google Drive accounts (~37,000 files, ~188 GB). The AI now 
 
 ## Pick Your Path
 
-**Path A — Claude Projects (no server required)**
-You run the script locally, get Markdown index files, upload them to a Claude Project. Works with a Claude Pro subscription. Takes an afternoon to set up. Indexes don't auto-update — you re-run and re-upload when you want them fresh.
+**Path A — Claude Code on your desktop (easiest)**
+Run the script once on your laptop. The index files land in a local folder. Point Claude Code at that folder and it reads them like any other file. No server, no uploading, no subscriptions beyond an API key for the summarizer. Refresh manually whenever you want updated indexes.
 
 **Path B — OpenClaw (fully automated)**
-The script runs as a background cron job on a VPS. Indexes stay current automatically. Your AI always has up-to-date context. More setup upfront, zero ongoing effort.
+The script runs as a background cron job on a VPS. Indexes stay current automatically. Your AI always has up-to-date context without you doing anything. More setup upfront, zero ongoing effort.
 
-Both paths use the same core script. The difference is just where the script runs and how your AI gets the output.
+Both paths use the same core script. The difference is just where it runs and how your AI reads the output.
 
 ---
 
-## Path A: Claude Projects
+## Path A: Claude Code on Your Desktop
 
 ### What you need
-- Python 3.10+ on your local machine
-- An OpenAI or Anthropic API key (for running the summarizer — Claude Pro alone isn't enough, you need API access)
-- Claude Pro subscription (for Projects with large file uploads)
-- `ffmpeg` (`brew install ffmpeg` on Mac, `apt install ffmpeg` on Linux)
-- `pdftotext` (`brew install poppler` on Mac, `apt install poppler-utils` on Linux)
+- [Claude Code](https://claude.ai/code) installed on your Mac/PC
+- Python 3.10+ on your machine
+- An OpenAI or Anthropic API key (for running the summarizer)
+- `ffmpeg` — `brew install ffmpeg` (Mac) or `apt install ffmpeg` (Linux)
+- `pdftotext` — `brew install poppler` (Mac) or `apt install poppler-utils` (Linux)
 - Google OAuth credentials for each Drive account you want to index
 
 ### How it works
 
-You run the script locally on your laptop (or any machine). It scans your Drive accounts and generates Markdown files. You upload those files to a Claude Project. Done.
+You run the script on your desktop. It scans your Drive accounts and generates Markdown index files in a local folder. You then work in Claude Code from that folder — or just tell Claude Code where the indexes are — and it can read them directly.
 
 ```
-Your Drive → script runs locally → Markdown files → upload to Claude Project → Claude knows everything
+Your Drive → script runs on your laptop → Markdown files in ~/drive-indexes/ → Claude Code reads them
 ```
 
-When you want fresh indexes (e.g., monthly), re-run the script and re-upload.
+No uploading. No server. Just local files.
 
 ### Setup
 
@@ -66,16 +66,16 @@ When you want fresh indexes (e.g., monthly), re-run the script and re-upload.
 
 Go to [Google Cloud Console](https://console.cloud.google.com/), create a project, enable the Drive API, and create OAuth 2.0 credentials (Desktop app type). Download the credentials JSON.
 
-Then authenticate for each account you want to index. The script handles the OAuth flow — it'll open a browser window for you to click "allow" once per account.
+Run the script once per account — it'll open a browser window asking you to authorize access. You click allow. That's the only manual step.
 
 **Step 2: Configure the script**
 
-Edit the top of `file-summarizer.py`:
+Clone this repo, then edit the top of `file-summarizer.py`:
 
 ```python
-TOKEN_DIR = Path("./tokens")         # where your OAuth tokens will live
-INDEX_DIR = Path("./drive-indexes")  # where index files get written
-STATE_FILE = Path("./state.json")    # checkpoint file
+TOKEN_DIR = Path("./tokens")          # OAuth token files per account
+INDEX_DIR = Path("./drive-indexes")   # where index files get written
+STATE_FILE = Path("./state.json")     # checkpoint — tracks what's been processed
 
 ACCOUNTS = {
     "main": {
@@ -83,59 +83,38 @@ ACCOUNTS = {
         "email": "me@example.com",
         "label": "Main Drive",
     },
-    # add more...
+    # add more accounts...
 }
 
-# Direct API — no OpenClaw needed for this path
+# Your AI API endpoint
 GATEWAY_URL = "https://api.openai.com/v1/chat/completions"
-GATEWAY_TOKEN = "sk-your-openai-key-here"
+GATEWAY_TOKEN = "sk-your-openai-key"
 GATEWAY_MODEL = "gpt-4o-mini"   # cheap, fast, good enough
-
-# OR use Anthropic directly:
-# GATEWAY_URL = "https://api.anthropic.com/v1/messages"
-# GATEWAY_TOKEN = "sk-ant-your-key"
-# GATEWAY_MODEL = "claude-3-haiku-20240307"
 ```
 
-**Step 3: Run the indexer + summarizer**
+**Step 3: Run it**
 
 ```bash
 pip install google-auth google-api-python-client requests
 
-# Initialize
+# Initialize state
 python3 file-summarizer.py --init
 
-# Dry run to check it's working
+# Dry run — check it's working before spending API credits
 python3 file-summarizer.py --batch-size 5 --dry-run
 
-# Run for real — let it go overnight
+# Run for real
 python3 file-summarizer.py --batch-size 50
 
 # Check progress
 python3 file-summarizer.py --status
 ```
 
-Leave it running. It processes files in batches and saves progress. For a typical Drive with 5,000 files, expect 2-4 hours. For 20,000+ files, run it overnight.
+Let it run. It saves progress after every file, so you can stop and restart anytime. For a 5,000-file Drive, expect 2-4 hours. For 20,000+ files, leave it overnight.
 
-**Step 4: Upload to Claude Projects**
+**Step 4: Build DRIVE-MAP.md**
 
-When it finishes, you'll have files like:
-```
-drive-indexes/
-  main.md          ← file listing for main account
-  main-files.md    ← AI summaries for main account
-  personal.md
-  personal-files.md
-DRIVE-MAP.md       ← the master map (create this manually, see format below)
-```
-
-Go to [claude.ai/projects](https://claude.ai/projects), create a new project ("My Files" or whatever), and upload all these files as Project Knowledge.
-
-**That's it.** Now open a conversation in that project and ask "where's my lease agreement from 2024?" Claude will actually know.
-
-### Building DRIVE-MAP.md
-
-Create this file manually — it takes 5 minutes and is the most important piece. It's what Claude reads first to orient itself:
+When it finishes, create one more file manually in your `drive-indexes/` folder — the master map. This is what Claude Code reads first to orient itself:
 
 ```markdown
 # DRIVE-MAP — Where Everything Lives
@@ -143,21 +122,29 @@ Create this file manually — it takes 5 minutes and is the most important piece
 ## me@example.com — Main Account
 ~5,000 files | 25 GB
 Work files, projects, invoices, contracts.
-Overlay index: main.md | Summaries: main-files.md
+Index: main.md | Summaries: main-files.md
 
 ## personal@gmail.com — Personal
 ~3,000 files | 18 GB
 Photos, health records, travel docs.
-Overlay index: personal.md | Summaries: personal-files.md
+Index: personal.md | Summaries: personal-files.md
 ```
 
-Upload this to your Claude Project too.
+**Step 5: Use it with Claude Code**
+
+Open Claude Code in (or pointed at) your `drive-indexes/` folder. Then just ask naturally:
+
+> "Find the partnership agreement from 2024"
+> "Where are my tax returns?"
+> "Do I have any photos from the Bali trip?"
+
+Claude Code reads the index files, finds the file, and tells you exactly where it lives in your Drive. If it needs more detail, it reads the summary. If you need the actual file, you open it in Drive directly.
 
 ### Keeping it current
 
-The indexes are a snapshot. They don't update automatically on Path A.
+The indexes are a snapshot. Re-run the script whenever you want them refreshed — it only processes new or changed files, so subsequent runs are much faster than the first one.
 
-A reasonable rhythm: re-run the script once a month, re-upload the changed files to your Claude Project. Takes about 15 minutes once the initial run is done (only new/changed files get re-summarized).
+A reasonable rhythm: run it once a month, or after any big batch of file changes.
 
 ---
 
@@ -171,62 +158,48 @@ A reasonable rhythm: re-run the script once a month, re-upload the changed files
 
 ### How it works
 
-You set up the script as an OpenClaw cron job. It runs every 30 minutes in the background, processes a batch of files, and writes summaries to index files in your workspace. Your AI reads those indexes automatically — they're part of its workspace context.
-
-When new files appear in your Drive, they get picked up and summarized automatically. The AI always has current context.
+The script runs as a cron job every 30 minutes. It processes a batch of files, writes summaries to index files in your OpenClaw workspace, and your AI reads them automatically as part of its context. New files in your Drive get picked up and summarized without you doing anything.
 
 ```
-Your Drive → cron runs every 30min → indexes update → AI workspace → always current
+Your Drive → cron every 30min → indexes update → AI workspace → always current
 ```
 
 ### Setup
 
-**Step 1: Get OAuth tokens**
+**Step 1: OAuth tokens**
 
-If you're using OpenClaw with Gmail already, you have these. Check `/root/.credentials/email-tokens/` for JSON files per account. If not, follow the OpenClaw Gmail setup guide — Drive uses the same OAuth scopes.
+If you're already using OpenClaw with Gmail connected, you have these. Check `/root/.credentials/email-tokens/` for JSON files per account. If not, follow the OpenClaw Gmail setup — Drive uses the same OAuth scopes.
 
 **Step 2: Configure the script**
-
-Same as Path A, but the endpoint points to OpenClaw's gateway:
 
 ```python
 TOKEN_DIR = Path("/root/.credentials/email-tokens")
 INDEX_DIR = Path("/root/clawd/memory/drive-indexes")
 STATE_FILE = Path("/root/clawd/tasks/file-summarizer-state.json")
 
-# OpenClaw gateway endpoint
+# OpenClaw gateway (routes to whatever model you have configured)
 GATEWAY_URL = "http://127.0.0.1:18789/v1/chat/completions"
 GATEWAY_TOKEN = "your-openclaw-gateway-token"
 GATEWAY_MODEL = "gpt-4o-mini"
 ```
 
-**Step 3: Initialize**
+**Step 3: Initialize and set up the cron**
 
 ```bash
 python3 scripts/file-summarizer.py --init
-python3 scripts/file-summarizer.py --status
 ```
 
-**Step 4: Create the cron job in OpenClaw**
-
-In OpenClaw, add a cron job that runs every 30 minutes:
-
+In OpenClaw, add a cron job:
 ```
 Schedule: every 30 minutes
-Task: python3 /path/to/file-summarizer.py --batch-size 20
+Task: python3 /root/clawd/scripts/file-summarizer.py --batch-size 20
 ```
 
-Or add a monitoring cron that checks progress every 12 hours and reports to you.
+Add `DRIVE-MAP.md` to your workspace root — OpenClaw loads it into context automatically.
 
-**Step 5: Add DRIVE-MAP.md to your workspace**
+### Free inference via Codex
 
-Same format as Path A. Put it at the root of your OpenClaw workspace (`/root/clawd/DRIVE-MAP.md`). OpenClaw loads workspace files into context automatically.
-
-### Running costs on Path B
-
-If you're using OpenClaw with a ChatGPT Pro subscription, you can route the summarizer through OpenClaw's Codex integration — which means AI inference is free. This is how we ran our 37,000-file index at zero API cost.
-
-Without that, costs are the same as Path A: ~$10-40 for 20,000 files using cheap models.
+If you have a ChatGPT Pro subscription, you can route the summarizer through OpenClaw's Codex integration for free AI inference. This is how we ran our 37,000-file index at zero API cost. Without that, costs are the same as Path A.
 
 ---
 
@@ -241,7 +214,7 @@ Both paths use the same `file-summarizer.py`. Here's how it handles different fi
 | Google Docs / Slides / Sheets | Export as plain text → AI → 2-3 sentence summary |
 | PDFs | Download → extract text (first 5 pages) → AI → summary |
 | DOCX | Download → extract text → AI → summary |
-| Audio / audiobooks | Stub: `(audio: filename)` — can't summarize audio |
+| Audio / audiobooks | Stub: `(audio: filename)` — can't summarize audio with vision |
 | Bulk AI image sequences | Stub: `(image: filename)` — not worth API credits |
 
 Expect ~83% real summaries, ~17% graceful stubs. The stubs are correct — those file types genuinely can't be described by a vision model.
@@ -250,23 +223,23 @@ Expect ~83% real summaries, ~17% graceful stubs. The stubs are correct — those
 
 ## Running Costs
 
-| Component | Cost |
-|-----------|------|
-| Drive API calls (indexing) | Free |
-| Vision model (images/video) | ~$0.001–0.003 per file |
-| Text model (docs/PDFs) | ~$0.0005–0.001 per file |
-| 5,000 files total | ~$3–10 |
-| 20,000 files total | ~$10–40 |
+| What | Cost |
+|------|------|
+| Drive API (indexing) | Free |
+| Vision (images/video) | ~$0.001–0.003 per file |
+| Text (docs/PDFs) | ~$0.0005–0.001 per file |
+| 5,000 files | ~$3–10 |
+| 20,000 files | ~$10–40 |
 
-Use GPT-4o-mini or Gemini 1.5 Flash. You don't need a smart model here — just one that can describe what's in a file. Cheap and fast beats expensive and slow for bulk work.
+Use GPT-4o-mini or Gemini 1.5 Flash. You don't need a powerful model for this — the task is "describe what's in this file," not deep reasoning.
 
 ---
 
 ## What's Not In This Repo Yet
 
-- **Drive indexer script** — the script that builds the initial file listings from Drive. Coming soon; currently cleaning it up for release.
+- **Drive indexer script** — builds the initial file listings from Drive. Cleaning it up for release now.
 - **Auto-tagger** — adds searchable tags to index entries.
-- **Cleanup assistant** — suggests files to archive or delete.
+- **Cleanup assistant** — suggests files to archive based on age and content.
 
 Watch the repo or the YouTube channel for updates.
 
@@ -274,23 +247,20 @@ Watch the repo or the YouTube channel for updates.
 
 ## FAQ
 
-**Do I need a Claude Pro subscription for Path A?**
-You need it for Claude Projects (which is what gives you the persistent file knowledge). You also need API access (separate from Pro) to run the summarizer itself. Both are Anthropic products but billed separately.
-
-**Does it re-summarize files every time?**
-No. State is tracked per file ID. Once a file has a summary, it's skipped on every subsequent run.
+**Does it re-summarize files every time it runs?**
+No. It tracks processed file IDs. Once a file has a summary, it's always skipped.
 
 **What if the script gets interrupted?**
-It checkpoints after every file. Restart it and it picks up exactly where it stopped.
+It checkpoints after every file. Restart and it picks up exactly where it stopped.
 
 **What model should I use?**
-GPT-4o-mini or Gemini 1.5 Flash for both vision and text. Fast, cheap, accurate enough. Don't use expensive models for bulk summarization.
+GPT-4o-mini or Gemini 1.5 Flash. Fast and cheap. Don't use expensive models for bulk work.
 
 **What about privacy?**
-Files get sent to your AI provider's API temporarily. For sensitive files (medical records, legal docs), either skip those folders or use a local model like Ollama with LLaVA for vision.
+Files are temporarily sent to your AI provider's API. For sensitive files (medical, legal), skip those folders or use a local model like Ollama with LLaVA for vision.
 
 **Can I use this with Dropbox or iCloud?**
-The script is Google Drive only right now. The architecture works for any provider — just needs a different download layer.
+Script is Google Drive only right now. The architecture works for any provider — just needs a different download layer.
 
 ---
 

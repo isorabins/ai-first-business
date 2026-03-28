@@ -1,12 +1,16 @@
-# Local File Indexer — Instructions for Claude Code
+# File Indexer — Instructions for Claude Code
 
-Drop this file into your Claude Code project. Claude will read it and know how to index your local machine.
+Drop this file into your Claude Code project. Claude will read it and know how to index your local files and Google Drive.
 
 ---
 
 ## What this does
 
-Builds a searchable Markdown index of files on your local machine so Claude can answer questions like "where is that contract I signed in January?" or "find me all my photos from the Bali trip" — without you having to remember where anything is.
+Builds a searchable Markdown index of your files so Claude can answer "where is that contract from January?" or "find my Bali photos" without you having to remember where anything lives.
+
+Works on:
+- **Local files** — anything on your Mac or PC (Documents, Desktop, Downloads, etc.)
+- **Google Drive** — your Drive files, with AI summaries of what's actually inside each one
 
 ---
 
@@ -16,52 +20,113 @@ Tell Claude:
 
 > "Index my files. Follow the instructions in CLAUDE-CODE-local-file-indexer.md."
 
-That's it. Claude will do the rest — no scripts to run, nothing to install.
+No scripts to run. Claude does the work.
 
 ---
 
-## Instructions for Claude Code
+## Path 1: Local Files (no setup needed)
 
-When the user asks you to index their files, follow this procedure exactly.
+Claude Code can read files directly on your machine. Tell it which folder to start with — it'll walk the tree, read each file, and write a searchable index.
 
-### Step 1 — Ask where to start
+**Tell Claude:** "Index my ~/Documents folder."
 
-Ask the user: "Which folder do you want me to index? (e.g. ~/Documents, ~/Desktop, or your whole home folder)"
+Claude will:
+1. Walk the folder recursively
+2. Read each text file (first ~10,000 characters) and write a 1-2 sentence summary
+3. Describe images using vision
+4. Write index files to `file-indexes/` in your project
 
-If they say their whole machine or home folder, start at `~` and skip hidden folders (anything starting with `.`) and system folders (`/System`, `/Library`, `/Applications`, `node_modules`, `.git`).
+**What to expect:**
+- 500 files → a few minutes
+- 5,000+ files → can take 30–60 min; Claude will process in batches across sessions
+- Very large drives: Claude processes what it can per session. Say "continue indexing" to pick up where it left off.
 
-### Step 2 — Scan the directory tree
+**Limitations of local indexing:**
+- Claude can only read what's on disk — it can't access Drive files unless they're synced locally
+- Binary files (executables, proprietary formats) get recorded but not summarized
+- Large folders may exceed what fits in one session — use batching (see below)
 
-Walk the directory recursively. For each file, record:
-- File name
-- Full path
-- File type (extension)
-- Size
-- Modified date
+---
 
-Skip: `.DS_Store`, `Thumbs.db`, `node_modules`, `.git`, `__pycache__`, `.trash`, `/System`, `/Library`, `/Applications`.
+## Path 2: Google Drive via MCP (recommended for Drive users)
 
-### Step 3 — Summarize files
+For indexing Google Drive directly, add a Google Drive MCP server to your project. This gives Claude Code live access to read, search, and summarize your Drive files.
 
-For each file you can read:
+### One-time setup (~10 minutes)
 
-**Text files** (`.txt`, `.md`, `.pdf`, `.docx`, `.pages`, `.rtf`, spreadsheets, CSVs):
-Read the content (first ~10,000 characters). Write a 1-2 sentence summary describing what the document is, who's involved, and any key details (dates, amounts, decisions).
+**Step 1: Create Google Cloud credentials**
 
-**Images** (`.jpg`, `.jpeg`, `.png`, `.heic`, `.gif`, `.webp`):
-Use your vision capability. Describe what's in the image in one sentence. Be specific about people, activities, and setting.
+1. Go to https://console.cloud.google.com
+2. Create a project (or use existing)
+3. Enable these APIs: Google Drive API, Google Docs API, Google Sheets API
+4. Go to APIs & Services → Credentials → + Create Credentials → OAuth 2.0 Client ID → Desktop app
+5. Copy the Client ID and Client Secret
 
-**Videos** (`.mp4`, `.mov`, `.avi`, `.mkv`):
-Note based on filename and folder context: `Video file — [filename]`
+**Step 2: Authenticate**
 
-**Files you can't read** (executables, binary formats):
-Just record the name, path, size, and date. No summary needed.
+Run this once in your terminal:
 
-### Step 4 — Write the index files
+```bash
+GOOGLE_CLIENT_ID="your-client-id" \
+GOOGLE_CLIENT_SECRET="your-client-secret" \
+npx -y @a-bonus/google-docs-mcp auth
+```
 
-Create a folder called `file-indexes/` in the current project directory.
+This opens a browser for Google sign-in. After you approve, a token is saved to `~/.config/google-docs-mcp/token.json`. You won't need to do this again.
 
-Write one index file per top-level folder you scanned. Name each file after the folder (e.g. `file-indexes/Documents.md`, `file-indexes/Desktop.md`).
+**Step 3: Add MCP config to your project**
+
+Create a file called `.mcp.json` in your Claude Code project directory:
+
+```json
+{
+  "mcpServers": {
+    "google-docs": {
+      "command": "npx",
+      "args": ["-y", "@a-bonus/google-docs-mcp"],
+      "env": {
+        "GOOGLE_CLIENT_ID": "your-client-id",
+        "GOOGLE_CLIENT_SECRET": "your-client-secret"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Code. You'll now have Google Drive tools available.
+
+**Step 4: Tell Claude to index your Drive**
+
+> "Index my Google Drive. Follow the instructions in CLAUDE-CODE-local-file-indexer.md."
+
+---
+
+## Instructions for Claude: How to Build the Index
+
+When the user asks you to index their files, follow this procedure.
+
+### For local files
+
+**Step 1 — Ask which folder**
+
+Ask: "Which folder do you want me to index? (e.g. ~/Documents, ~/Desktop, or your whole home folder)"
+
+If they say their whole home folder, start at `~` and skip: `.` hidden folders, `/System`, `/Library`, `/Applications`, `node_modules`, `.git`, `__pycache__`, `.trash`.
+
+**Step 2 — Scan and summarize**
+
+Walk the directory recursively. For each file:
+
+- **Text files** (`.txt`, `.md`, `.pdf`, `.docx`, `.pages`, `.csv`, spreadsheets): Read content (first ~10,000 chars). Write 1-2 sentence summary — what is it, who's involved, key dates/amounts/decisions.
+- **Images** (`.jpg`, `.png`, `.heic`, `.gif`, `.webp`): Use vision. One sentence describing what's shown — be specific about people, activities, setting.
+- **Videos** (`.mp4`, `.mov`, `.avi`): Record as `Video — [filename in context of folder]`
+- **Everything else**: Record name, path, size, date. No summary.
+
+**Step 3 — Write index files**
+
+Write to `file-indexes/` in the project:
+- One `.md` file per top-level folder (e.g. `file-indexes/Documents.md`)
+- A master `file-indexes/INDEX.md` pointing to all of them
 
 Format:
 
@@ -72,64 +137,63 @@ Format:
 ## Contracts/ (12 files)
 | File | Path | Size | Modified | Summary |
 |------|------|------|----------|---------|
-| lease-2024.pdf | ~/Documents/Contracts/lease-2024.pdf | 84 KB | Jan 12 | Apartment lease for 123 Main St, signed Jan 2024, expires Jan 2025. |
-| consulting-agreement.pdf | ~/Documents/Contracts/consulting-agreement.pdf | 52 KB | Mar 3 | Consulting agreement with Acme Corp, $5,000/mo, 6-month term. |
-
-## Receipts/ (34 files)
-| File | Path | Size | Modified | Summary |
-|------|------|------|----------|---------|
-...
+| lease-2024.pdf | ~/Documents/Contracts/lease-2024.pdf | 84 KB | Jan 12 | Apartment lease at 123 Main St, signed Jan 2024, expires Jan 2025. |
 ```
 
-Also write a top-level `file-indexes/INDEX.md` — the master map:
+**Step 4 — Handle large folders with batching**
 
-```markdown
-# File Index — Master Map
-*Indexed: [date]*
+If a folder has more than ~500 files, don't try to do everything in one session. Instead:
+1. Process the first 500 files and write what you have
+2. Tell the user: "Indexed 500 of 2,400 files in Documents. Say 'continue indexing' to process the next batch."
+3. On each "continue indexing," pick up from where you left off (track progress in `file-indexes/.progress.json`)
 
-## Folders
+### For Google Drive (when MCP is connected)
 
-| Folder | Files | Description |
-|--------|-------|-------------|
-| Documents | 847 | Contracts, invoices, notes, PDFs |
-| Desktop | 34 | Recent downloads, current projects |
-| Downloads | 1,204 | Mixed — installers, documents, media |
+Use the `google-docs` MCP tools to:
+1. List all folders in Drive
+2. For each folder, list files
+3. For each file: use `readDocument`, `readSpreadsheet`, or search tools to get content; write a 1-2 sentence summary
+4. Write results to `file-indexes/drive-[account].md`
 
-## How to use this
-Ask me any question about your files. I'll check the index and tell you exactly where things are.
-Examples:
-- "Find the lease agreement"
-- "Where are my tax returns?"
-- "Do I have any photos from the Bali trip?"
-```
-
-### Step 5 — Tell the user what you did
-
-When done, report:
-- How many files you indexed
-- Where the index files are (`file-indexes/`)
-- A quick example: "You can now ask me 'find the partnership agreement from 2024' and I'll find it immediately."
+Use the same batching approach for large drives. Drive access is slower than local — expect 1-2 seconds per file for summarization.
 
 ---
 
-## Ongoing use
+## The Output
 
-After the first index, the user can ask:
-- "Find my lease agreement" → check the index, return the exact path
-- "What documents do I have from January?" → search the index by date
-- "Re-index my Downloads folder" → redo just that section
+When complete, you'll have:
 
-The index is a snapshot. To update it after adding new files, the user can say "re-index [folder]" — only new/changed files get processed.
+```
+file-indexes/
+  INDEX.md           ← start here — master map of everything
+  Documents.md       ← all files in ~/Documents with summaries
+  Desktop.md         ← all files on Desktop
+  drive-main.md      ← Google Drive index (if connected)
+  .progress.json     ← tracks what's been done (for batching)
+```
+
+Ask Claude anything:
+> "Find the partnership agreement from 2024"
+> "Where are my tax returns?"
+> "What's in my Bali folder?"
+
+Claude checks the index and tells you the exact path.
 
 ---
 
-## Tips for Claude
+## Keeping it current
 
-- Large folders (10,000+ files) take time. Tell the user what you're doing as you go.
-- If you hit a file you can't open, skip it — don't stop.
-- Prioritize Documents, Desktop, and work folders. System files and code dependencies (`node_modules`, `.git`) aren't useful to index.
-- If vision is slow or not available, skip images and note them as `(image: filename)` — still useful to know they exist.
-- After indexing, stay oriented: when the user asks about a file, always check the index before saying you don't know.
+The index is a snapshot. To refresh:
+- **Local:** Tell Claude "re-index ~/Documents" — it only processes files modified since the last run
+- **Drive:** Tell Claude "update my Drive index" — same, only new/changed files
+
+Reasonable rhythm: whenever you notice you can't find something, or once a month.
+
+---
+
+## Privacy note
+
+Files are summarized by Claude using its built-in capability — text files are read directly, images use vision. For **local files**, nothing leaves your machine. For **Google Drive**, file content passes through the MCP server to Claude's context. Skip sensitive folders by telling Claude "skip ~/Documents/Medical."
 
 ---
 

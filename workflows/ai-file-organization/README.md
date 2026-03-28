@@ -28,241 +28,106 @@ We ran this across 5 Google Drive accounts (~37,000 files, ~188 GB). The AI now 
 
 ---
 
-## Pick Your Path
+## How to Use This
 
-**Path A — Claude Code on your desktop (easiest)**
-Run the script once on your laptop. The index files land in a local folder. Point Claude Code at that folder and it reads them like any other file. No server, no uploading, no subscriptions beyond an API key for the summarizer. Refresh manually whenever you want updated indexes.
+**There's no code to run. Drop in a file, tell your AI to follow it.**
 
-**Path B — OpenClaw (fully automated)**
-The script runs as a background cron job on a VPS. Indexes stay current automatically. Your AI always has up-to-date context without you doing anything. More setup upfront, zero ongoing effort.
-
-Both paths use the same core script. The difference is just where it runs and how your AI reads the output.
+Pick your path:
 
 ---
 
-## Path A: Claude Code on Your Desktop
+### Path A — Claude Code (no server needed)
 
-### What you need
-- [Claude Code](https://claude.ai/code) installed on your Mac/PC
-- Python 3.10+ on your machine
-- An OpenAI or Anthropic API key (for running the summarizer)
-- `ffmpeg` — `brew install ffmpeg` (Mac) or `apt install ffmpeg` (Linux)
-- `pdftotext` — `brew install poppler` (Mac) or `apt install poppler-utils` (Linux)
-- Google OAuth credentials for each Drive account you want to index
+**Drop [`CLAUDE-CODE-local-file-indexer.md`](../../CLAUDE-CODE-local-file-indexer.md) into your Claude Code project.**
 
-### How it works
+Then tell Claude:
 
-You run the script on your desktop. It scans your Drive accounts and generates Markdown index files in a local folder. You then work in Claude Code from that folder — or just tell Claude Code where the indexes are — and it can read them directly.
+> "Index my files. Follow the instructions in CLAUDE-CODE-local-file-indexer.md."
 
-```
-Your Drive → script runs on your laptop → Markdown files in ~/drive-indexes/ → Claude Code reads them
-```
+Claude Code reads the file, scans your local folders, writes the indexes, and you're done. No installs, no scripts, no setup steps.
 
-No uploading. No server. Just local files.
+Works on local files (Desktop, Documents, Downloads, etc.). Claude Code's vision capability handles images. Refresh by asking it to re-index anytime.
 
-### Setup
+---
 
-**Step 1: Get Google OAuth credentials**
+### Path B — OpenClaw (always up-to-date)
 
-Go to [Google Cloud Console](https://console.cloud.google.com/), create a project, enable the Drive API, and create OAuth 2.0 credentials (Desktop app type). Download the credentials JSON.
+**Drop [`OPENCLAW-google-drive-indexer.md`](../../OPENCLAW-google-drive-indexer.md) into your OpenClaw workspace.**
 
-Run the script once per account — it'll open a browser window asking you to authorize access. You click allow. That's the only manual step.
+Then tell your agent:
 
-**Step 2: Configure the script**
+> "Set up Drive indexing. Follow the instructions in OPENCLAW-google-drive-indexer.md."
 
-Clone this repo, then edit the top of `file-summarizer.py`:
+Your OpenClaw agent reads the instructions, connects to your Google Drive via OAuth, builds the indexes, and sets up a cron job to keep them current automatically. You never have to think about it again.
 
-```python
-TOKEN_DIR = Path("./tokens")          # OAuth token files per account
-INDEX_DIR = Path("./drive-indexes")   # where index files get written
-STATE_FILE = Path("./state.json")     # checkpoint — tracks what's been processed
+Works across multiple Google Drive accounts. Runs on your VPS in the background. New files get picked up and summarized without you doing anything.
 
-ACCOUNTS = {
-    "main": {
-        "token": "main_token.json",
-        "email": "me@example.com",
-        "label": "Main Drive",
-    },
-    # add more accounts...
-}
+---
 
-# Your AI API endpoint
-GATEWAY_URL = "https://api.openai.com/v1/chat/completions"
-GATEWAY_TOKEN = "sk-your-openai-key"
-GATEWAY_MODEL = "gpt-4o-mini"   # cheap, fast, good enough
-```
+## What the Output Looks Like
 
-**Step 3: Run it**
-
-```bash
-pip install google-auth google-api-python-client requests
-
-# Initialize state
-python3 file-summarizer.py --init
-
-# Dry run — check it's working before spending API credits
-python3 file-summarizer.py --batch-size 5 --dry-run
-
-# Run for real
-python3 file-summarizer.py --batch-size 50
-
-# Check progress
-python3 file-summarizer.py --status
-```
-
-Let it run. It saves progress after every file, so you can stop and restart anytime. For a 5,000-file Drive, expect 2-4 hours. For 20,000+ files, leave it overnight.
-
-**Step 4: Build DRIVE-MAP.md**
-
-When it finishes, create one more file manually in your `drive-indexes/` folder — the master map. This is what Claude Code reads first to orient itself:
+Once the index is built, you have a `DRIVE-MAP.md` at the top level that looks like this:
 
 ```markdown
 # DRIVE-MAP — Where Everything Lives
 
-## me@example.com — Main Account
+## me@example.com — Main Drive
 ~5,000 files | 25 GB
 Work files, projects, invoices, contracts.
-Index: main.md | Summaries: main-files.md
+Index: drive-indexes/main.md
 
 ## personal@gmail.com — Personal
 ~3,000 files | 18 GB
 Photos, health records, travel docs.
-Index: personal.md | Summaries: personal-files.md
+Index: drive-indexes/personal.md
 ```
 
-**Step 5: Use it with Claude Code**
-
-Open Claude Code in (or pointed at) your `drive-indexes/` folder. Then just ask naturally:
-
-> "Find the partnership agreement from 2024"
-> "Where are my tax returns?"
-> "Do I have any photos from the Bali trip?"
-
-Claude Code reads the index files, finds the file, and tells you exactly where it lives in your Drive. If it needs more detail, it reads the summary. If you need the actual file, you open it in Drive directly.
-
-### Keeping it current
-
-The indexes are a snapshot. Re-run the script whenever you want them refreshed — it only processes new or changed files, so subsequent runs are much faster than the first one.
-
-A reasonable rhythm: run it once a month, or after any big batch of file changes.
+And each index file is a searchable table of every file with a one-line AI summary of its contents.
 
 ---
 
-## Path B: OpenClaw (Automated)
+## What Gets Indexed
 
-### What you need
-- [OpenClaw](https://openclaw.ai) running on a VPS or always-on machine
-- Python 3.10+ on that machine
-- `ffmpeg` and `pdftotext` installed
-- Google OAuth tokens (OpenClaw's Gmail setup gives you these automatically)
-
-### How it works
-
-The script runs as a cron job every 30 minutes. It processes a batch of files, writes summaries to index files in your OpenClaw workspace, and your AI reads them automatically as part of its context. New files in your Drive get picked up and summarized without you doing anything.
-
-```
-Your Drive → cron every 30min → indexes update → AI workspace → always current
-```
-
-### Setup
-
-**Step 1: OAuth tokens**
-
-If you're already using OpenClaw with Gmail connected, you have these. Check `/root/.credentials/email-tokens/` for JSON files per account. If not, follow the OpenClaw Gmail setup — Drive uses the same OAuth scopes.
-
-**Step 2: Configure the script**
-
-```python
-TOKEN_DIR = Path("/root/.credentials/email-tokens")
-INDEX_DIR = Path("/root/clawd/memory/drive-indexes")
-STATE_FILE = Path("/root/clawd/tasks/file-summarizer-state.json")
-
-# OpenClaw gateway (routes to whatever model you have configured)
-GATEWAY_URL = "http://127.0.0.1:18789/v1/chat/completions"
-GATEWAY_TOKEN = "your-openclaw-gateway-token"
-GATEWAY_MODEL = "gpt-4o-mini"
-```
-
-**Step 3: Initialize and set up the cron**
-
-```bash
-python3 scripts/file-summarizer.py --init
-```
-
-In OpenClaw, add a cron job:
-```
-Schedule: every 30 minutes
-Task: python3 /root/clawd/scripts/file-summarizer.py --batch-size 20
-```
-
-Add `DRIVE-MAP.md` to your workspace root — OpenClaw loads it into context automatically.
-
-### Free inference via Codex
-
-If you have a ChatGPT Pro subscription, you can route the summarizer through OpenClaw's Codex integration for free AI inference. This is how we ran our 37,000-file index at zero API cost. Without that, costs are the same as Path A.
-
----
-
-## The Script: What It Does
-
-Both paths use the same `file-summarizer.py`. Here's how it handles different file types:
-
-| File type | Approach |
-|-----------|----------|
-| Images (JPEG, PNG, HEIC) | Convert to JPEG → vision model → 1-sentence description |
-| Videos (MP4, MOV, etc.) | Extract frame at 1s → vision model → 1-sentence description |
-| Google Docs / Slides / Sheets | Export as plain text → AI → 2-3 sentence summary |
-| PDFs | Download → extract text (first 5 pages) → AI → summary |
-| DOCX | Download → extract text → AI → summary |
-| Audio / audiobooks | Stub: `(audio: filename)` — can't summarize audio with vision |
-| Bulk AI image sequences | Stub: `(image: filename)` — not worth API credits |
-
-Expect ~83% real summaries, ~17% graceful stubs. The stubs are correct — those file types genuinely can't be described by a vision model.
+| File type | How |
+|-----------|-----|
+| Google Docs / Slides / Sheets | Exported as text → AI summary |
+| PDFs | Text extracted → AI summary |
+| Images (JPEG, PNG, HEIC) | Vision model → 1-sentence description |
+| Videos (MP4, MOV, etc.) | Frame extracted → vision model → description |
+| DOCX | Text extracted → AI summary |
+| Audio | Skipped (can't describe audio with vision) |
 
 ---
 
 ## Running Costs
 
-| What | Cost |
-|------|------|
-| Drive API (indexing) | Free |
-| Vision (images/video) | ~$0.001–0.003 per file |
-| Text (docs/PDFs) | ~$0.0005–0.001 per file |
+| Scale | Estimated cost |
+|-------|---------------|
+| 1,000 files | ~$0.50–2 |
 | 5,000 files | ~$3–10 |
-| 20,000 files | ~$10–40 |
+| 20,000+ files | ~$10–40 |
 
-Use GPT-4o-mini or Gemini 1.5 Flash. You don't need a powerful model for this — the task is "describe what's in this file," not deep reasoning.
+Use GPT-4o-mini or Gemini 1.5 Flash for the summarizer. You don't need a powerful model — the task is just "describe what's in this file."
 
----
-
-## What's Not In This Repo Yet
-
-- **Drive indexer script** — builds the initial file listings from Drive. Cleaning it up for release now.
-- **Auto-tagger** — adds searchable tags to index entries.
-- **Cleanup assistant** — suggests files to archive based on age and content.
-
-Watch the repo or the YouTube channel for updates.
+For OpenClaw users: you can route this through the built-in Codex integration for zero API cost if you have a ChatGPT Pro subscription. That's how we ran 37,000 files for free.
 
 ---
 
 ## FAQ
 
-**Does it re-summarize files every time it runs?**
-No. It tracks processed file IDs. Once a file has a summary, it's always skipped.
+**Do I need to write any code?**
+No. Both paths are drop-in instruction files. Your AI reads the instructions and does the work.
 
-**What if the script gets interrupted?**
-It checkpoints after every file. Restart and it picks up exactly where it stopped.
+**What if I just want to index local files, not Drive?**
+Use Path A (Claude Code). It works on any local folder.
 
-**What model should I use?**
-GPT-4o-mini or Gemini 1.5 Flash. Fast and cheap. Don't use expensive models for bulk work.
+**Can I re-run it to pick up new files?**
+Yes. Both paths track what's already been processed and only add new files on subsequent runs.
 
 **What about privacy?**
-Files are temporarily sent to your AI provider's API. For sensitive files (medical, legal), skip those folders or use a local model like Ollama with LLaVA for vision.
-
-**Can I use this with Dropbox or iCloud?**
-Script is Google Drive only right now. The architecture works for any provider — just needs a different download layer.
+Files are temporarily sent to your AI provider's API for summarization. For sensitive folders (medical, legal), you can tell your AI to skip them.
 
 ---
 
 *Part of the [ai-first-business](https://github.com/isorabins/ai-first-business) project.*
-*Follow the build on YouTube: [Life with AI with Iso](https://www.youtube.com/@isorabins)*
+*Follow the build: [Life with AI with Iso](https://www.youtube.com/@isorabins)*

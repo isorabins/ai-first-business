@@ -1,6 +1,6 @@
-# File Indexer — Instructions for Claude.ai
+# File Indexer — Instructions for Claude
 
-Drop this file into a Claude.ai Project. Claude will read it and know how to index your files.
+Drop this file into your Claude project. Claude will read it and know how to index your files.
 
 ---
 
@@ -8,71 +8,158 @@ Drop this file into a Claude.ai Project. Claude will read it and know how to ind
 
 Builds a searchable Markdown index of your files so Claude can instantly answer "where is that contract from January?" or "what's in my project folder?" — without you having to remember where anything lives.
 
-Works with:
-- **Files you upload directly** — PDFs, docs, images, anything you attach
-- **Google Drive** — connect your Drive account and Claude can read your Google Docs directly
+---
+
+## Which Claude are you using?
+
+**→ [Claude.ai](#path-a-claudeai-the-web--desktop-app)** — the web or desktop app at claude.ai
+
+**→ [Claude Code](#path-b-claude-code-the-cli-tool)** — the terminal CLI (`claude` command in your terminal)
 
 ---
 
-## Setup (one time)
+## Path A: Claude.ai (the web / desktop app)
 
-### Connect Google Drive
+### Connect Google Drive (one time, 30 seconds)
 
-1. In Claude.ai, open a Project (or start a new one)
+Claude.ai has a built-in Drive connector — no API keys, no terminal, nothing to install.
+
+1. Open a Project in Claude.ai
 2. Click **Add Content** → **Google Drive**
-3. Sign in with your Google account — one click, no technical setup
+3. Sign in with your Google account
+4. Done — Claude can now read your Drive files
 
-That's it. Claude can now read any Google Doc you share with it.
+> Available on Pro, Max, Team, and Enterprise plans.
 
-> **Note:** This works on Pro, Max, Team, and Enterprise plans.
+### Index your files
 
----
-
-## How to use it
-
-Once your Drive is connected, tell Claude:
+Tell Claude:
 
 > "Index my files. Follow the instructions in CLAUDE-AI-file-indexer.md."
 
-Then either:
-- **Upload files directly** to the conversation (PDFs, docs, images)
-- **Share Drive documents** by clicking + → Add from Google Drive and selecting files
+Then share files either by:
+- **Uploading directly** — click the paperclip, attach PDFs, Word docs, images
+- **Adding from Drive** — click + → Add from Google Drive, pick files
 
-Claude will read each file, write a summary, and build a searchable index you can query instantly.
+Claude reads each one, writes summaries, and builds a searchable index. Save the index to your Project knowledge so it persists across conversations.
+
+### What the Drive connector supports
+
+| Type | Supported |
+|------|-----------|
+| Google Docs | ✅ full text |
+| Google Sheets | ❌ — export as CSV and upload directly |
+| Google Slides | ❌ — export as PDF and upload directly |
+| PDFs (uploaded) | ✅ |
+| Images (uploaded) | ✅ via vision |
+| Word docs (uploaded) | ✅ |
+
+### Limitation: files are added one at a time
+
+The Claude.ai connector adds files individually. For bulk indexing across hundreds of files, use the OpenClaw path (see `OPENCLAW-google-drive-indexer.md`).
 
 ---
 
-## Instructions for Claude
+## Path B: Claude Code (the CLI tool)
 
-When the user asks you to index their files, follow this procedure.
+### Connect Google Drive via MCP (one time, ~10 minutes)
 
-### Step 1 — Find out what they have
+Claude Code uses MCP servers to connect to external services. Add the Google Drive MCP once and it's always available.
+
+**Step 1: Get Google Cloud credentials**
+
+1. Go to https://console.cloud.google.com
+2. Create or select a project
+3. Enable: Google Drive API, Google Docs API, Google Sheets API
+4. Go to APIs & Services → Credentials → + Create Credentials → OAuth 2.0 Client ID → **Desktop app**
+5. Copy the Client ID and Client Secret
+
+**Step 2: Authenticate**
+
+Run once in your terminal:
+
+```bash
+GOOGLE_CLIENT_ID="your-client-id" \
+GOOGLE_CLIENT_SECRET="your-client-secret" \
+npx -y @a-bonus/google-docs-mcp auth
+```
+
+A browser window opens. Sign in with Google, approve access. Token saved automatically — you won't need to do this again.
+
+**Step 3: Add MCP config**
+
+Create `.mcp.json` in your project directory:
+
+```json
+{
+  "mcpServers": {
+    "google-docs": {
+      "command": "npx",
+      "args": ["-y", "@a-bonus/google-docs-mcp"],
+      "env": {
+        "GOOGLE_CLIENT_ID": "your-client-id",
+        "GOOGLE_CLIENT_SECRET": "your-client-secret"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Code. Google Drive tools are now available.
+
+**Step 4: Index your files**
+
+Tell Claude:
+
+> "Index my files. Follow the instructions in CLAUDE-AI-file-indexer.md."
+
+Claude Code can index both local files and Google Drive. Tell it which to start with:
+- "Index my ~/Documents folder"
+- "Index my Google Drive"
+- "Index both my local Documents and my Drive"
+
+### What Claude Code can index
+
+| Type | Supported |
+|------|-----------|
+| Local files (any folder) | ✅ reads directly |
+| Google Docs | ✅ via MCP |
+| Google Sheets | ✅ via MCP |
+| Google Slides | ✅ via MCP |
+| PDFs (local or Drive) | ✅ |
+| Images (local) | ✅ via vision |
+| Word docs | ✅ |
+
+### Batching for large folders
+
+For folders with 500+ files, Claude Code processes in batches across sessions. It'll tell you when to say "continue indexing" to pick up where it left off.
+
+---
+
+## Instructions for Claude: How to Build the Index
+
+*(Follow this regardless of which path was used to connect Drive)*
+
+### Step 1 — Find out what to index
 
 Ask:
-> "What would you like me to index? You can:
-> 1. Upload files directly here (PDF, Word, images, etc.)
-> 2. Add Google Docs from your connected Drive
-> 3. Both"
+> "What would you like me to index? Local files, Google Drive, or both?"
 
 ### Step 2 — Process each file
 
-For each file or document the user provides:
+**Google Docs / Word / PDFs / text files:**
+Read content. Write a 2-sentence summary: what is it, who's involved, key dates/amounts/decisions.
 
-**Google Docs / uploaded text documents** (Word, PDF, plain text):
-Read the content. Write a 2-sentence summary covering: what it is, who's involved, and any key details (dates, amounts, decisions made).
+**Images:**
+Use vision. One sentence — specific about people, activities, setting.
 
-**Images** (.jpg, .png, .gif, etc.):
-Use vision. Describe what's in the image in one sentence — be specific about people, activities, and setting.
+**Spreadsheets / CSVs:**
+Summarize what data is tracked — column types, date range, type of records.
 
-**Spreadsheets / CSVs** (if uploaded directly):
-Summarize what the data is tracking — column types, date range, what kind of records.
+**Files you can't read:**
+Record filename, note it wasn't summarized.
 
-**Files you can't read** (executables, unsupported formats):
-Record the filename and note it couldn't be summarized.
-
-### Step 3 — Build the index
-
-After processing all files, write a master index document. Create it as a Markdown file the user can save (or offer to add it to their Project knowledge).
+### Step 3 — Write the index
 
 Format:
 
@@ -80,69 +167,33 @@ Format:
 # File Index
 *Created: [date] | [N] files*
 
-## Contracts/
-| File | Summary |
-|------|---------|
-| lease-2024.pdf | Apartment lease at 123 Main St, signed Jan 2024, expires Jan 2025. |
-| consulting-acme.pdf | Consulting agreement with Acme Corp, $5,000/mo, 6-month term starting April 2024. |
+## Contracts/ (8 files)
+| File | Modified | Summary |
+|------|----------|---------|
+| lease-2024.pdf | Jan 12 | Apartment lease at 123 Main St, signed Jan 2024, expires Jan 2025. |
+| consulting-acme.pdf | Mar 3 | Consulting agreement with Acme Corp, $5,000/mo, 6-month term starting April 2024. |
 
-## Photos/
-| File | Summary |
-|------|---------|
-| bali-trip-cover.jpg | Aerial view of Ubud rice terraces at sunset with palm trees in foreground. |
-
-## Reports/
-| File | Summary |
-|------|---------|
-| q1-2025-revenue.csv | Quarterly revenue tracking Jan–Mar 2025, 847 transactions across 3 product lines. |
+## Photos/ (34 files)
+| File | Modified | Summary |
+|------|----------|---------|
+| bali-trip.jpg | Feb 14 | Rice terraces at sunset in Ubud with palm trees in foreground. |
 ```
 
-### Step 4 — Save the index
+### Step 4 — Save it
 
-Offer to:
-1. Write the index as a Project file (so it persists across conversations)
-2. Copy it to their clipboard to save elsewhere
-
-Tell the user: "Save this index file to your Project knowledge so I can reference it in future conversations — just click 'Add to Project' when you paste it."
+- **Claude.ai:** Offer to add the index to Project knowledge so it persists
+- **Claude Code:** Write to `file-indexes/INDEX.md` in the project directory
 
 ---
 
-## Ongoing use
+## After indexing
 
-Once the index exists in the Project, the user can ask:
-- "Find the partnership agreement from 2024" → check the index, give the exact filename
-- "Which reports do I have from Q1?" → search by date/keyword in the index
-- "Summarize everything in the Contracts folder" → read each listed file
+Ask anything:
+- "Find the partnership agreement from 2024"
+- "Where are my tax returns?"
+- "What's in my Bali folder?"
 
-To add new files: share them in the conversation and say "add these to my index." Claude updates the index document.
-
----
-
-## What to know about the Drive connector
-
-Claude.ai's built-in Drive connector currently supports:
-
-| Type | Supported |
-|------|-----------|
-| Google Docs | ✅ Full text |
-| Google Sheets | ❌ Not yet |
-| Google Slides | ❌ Not yet |
-| Images inside Docs | ❌ Not extracted |
-| PDFs (uploaded directly) | ✅ |
-| Word docs (uploaded directly) | ✅ |
-| Images (uploaded directly) | ✅ via vision |
-
-**For Sheets and Slides:** Export as PDF or CSV and upload directly — Claude can read those.
-
-**For large drives:** The Drive connector lets you add files one at a time to a conversation. For bulk indexing across hundreds of files, use the OpenClaw path (see `OPENCLAW-google-drive-indexer.md`) which processes your entire Drive automatically.
-
----
-
-## Tips
-
-- Add the index file to your **Project knowledge** so it persists across all conversations in that project
-- When the index gets long (100+ files), Claude will search it rather than read every row — that's fine
-- Re-run the indexing process periodically for new files, or just say "add [new file] to my index" as you go
+To update: say "add [new file] to my index" or "re-index my Downloads folder."
 
 ---
 
